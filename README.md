@@ -1,1 +1,1 @@
-This is a repository of C programs that I've written
+A gravity simulator projects that I've written in C, fully rendered with ASCII graphics
