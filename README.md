@@ -1,1 +1,1 @@
-A gravity simulator projects that I've written in C, fully rendered with ASCII graphics
+A gravity simulator project that I've written in C, fully rendered with ASCII graphics
