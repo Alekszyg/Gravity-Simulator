@@ -1,3 +1,11 @@
+/*
+Gravity Simulator - An N-body gravitational simulation in 3D
+
+Author: Aleks Zygarlowski
+
+Start Date: 24/10/2025
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
