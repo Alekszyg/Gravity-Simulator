@@ -136,12 +136,8 @@ void render_objects_static(Object *sim_log, int time_seconds);
 char render_interactive(Object *sim_log, int time_seconds, bool have_time_control);
 void render_objects_playback(Object *sim_log, int start, int end);
 void rotate_render(Object *sim_log, int time_seconds);
-Vec3 rotate_point( Vec3, Vec3);
 Vec3 rotate_z_up(Vec3 v, double spin_deg, double pitch_deg);
-Vec3 rotate_z_up_pivot(Vec3 v, Vec3 pivot, double spin_deg, double pitch_deg);
-Vec3 rotate_point_2d(Vec3 p, double angle_degrees);
 void pan_camera(Vec3, double move, double pitch, double yaw);
-
 
 Vec3 mat3_multiply_vec3(Mat3 mat, Vec3 vec);
 
@@ -166,18 +162,6 @@ double calculate_resolution();
 void display_position(Object);
 void display_all_information(Object objects[]);
 void clear_input_buffer();
-
-Vec3 cross(Vec3 a, Vec3 b);
-
-double vec_length(Vec3 v);
-
-Vec3 normalize(Vec3 v);
-
-
-
-
-
-
 
 
 // ui
@@ -889,47 +873,6 @@ void rotate_render(Object *sim_log, int time_seconds)
         Sleep(10);
     }
 }
-Vec3 rotate_point( Vec3 point, Vec3 angles_degrees)
-{
-    Vec3 rotated;
-    // Convert to radians
-    double ax = angles_degrees.x * M_PI / 180.0;
-    double ay = angles_degrees.y * M_PI / 180.0;
-    double az = angles_degrees.z * M_PI / 180.0;
-
-    // Precompute cos/sin for each angle
-    double cx = cos(ax), sx = sin(ax);
-    double cy = cos(ay), sy = sin(ay);
-    double cz = cos(az), sz = sin(az);
-
-    // --- Rotate around X axis ---
-    double y1 = point.y * cx - point.z * sx;
-    double z1 = point.y * sx + point.z * cx;
-
-    // --- Rotate around Y axis ---
-    double x2 = point.x * cy + z1 * sy;
-    double z2 = -point.x * sy + z1 * cy;
-
-    // --- Rotate around Z axis ---
-    double x3 = x2 * cz - y1 * sz;
-    double y3 = x2 * sz + y1 * cz;
-
-    rotated = (Vec3){x3, y3, z2};
-    // Return only the projected X, Y (for rendering)
-    return rotated;
-}
-
-Vec3 rotate_point_2d(Vec3 p, double angle_degrees)
-{
-    double a = angle_degrees * (M_PI / 180.0); // convert deg → rad
-    double cs = cos(a);
-    double sn = sin(a);
-
-    Vec3 r;
-    r.x = p.x * cs - p.y * sn;
-    r.y = p.x * sn + p.y * cs;
-    return r;
-}
 
 Vec3 rotate_z_up(Vec3 v, double spin_deg, double pitch_deg)
 {
@@ -952,36 +895,6 @@ Vec3 rotate_z_up(Vec3 v, double spin_deg, double pitch_deg)
     double x2 = x1;
 
     Vec3 out = {x2, y2, z2};
-    return out;
-}
-
-Vec3 rotate_z_up_pivot(Vec3 v, Vec3 pivot, double spin_deg, double pitch_deg)
-{
-    double spin  = spin_deg * (M_PI / 180.0);
-    double pitch = pitch_deg * (M_PI / 180.0);
-
-    double cs = cos(spin);
-    double ss = sin(spin);
-    double cp = cos(pitch);
-    double sp = sin(pitch);
-
-    // Translate so pivot is origin
-    double x = v.x - pivot.x;
-    double y = v.y - pivot.y;
-    double z = v.z - pivot.z;
-
-    // --- Rotate around world Z (spin/yaw) ---
-    double x1 = cs * x - ss * y;
-    double y1 = ss * x + cs * y;
-    double z1 = z;
-
-    // --- Rotate around local X (pitch) ---
-    double y2 = cp * y1 - sp * z1;
-    double z2 = sp * y1 + cp * z1;
-    double x2 = x1;
-
-    // Translate back to world space
-    Vec3 out = { x2 + pivot.x, y2 + pivot.y, z2 + pivot.z };
     return out;
 }
 
