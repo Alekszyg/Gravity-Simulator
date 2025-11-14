@@ -156,12 +156,6 @@ Mat3 create_pitch_matrix(double pitch);
 Mat3 create_yaw_matrix(double yaw);
 
 
-
-
-
-
-
-
 // utility
 bool is_interval(int, int);
 char *display_time(int);
