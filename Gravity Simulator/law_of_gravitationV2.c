@@ -59,7 +59,7 @@ double cameraY = 0;
 
 
 
-int view_focused_object = 0;      // what object is the view focused on
+int view_focused_object = -1;      // what object is the view focused on
 int motion_relative_to_object = 0; // what object is the view focused on; // displays motion relative to this object
 
 
@@ -88,6 +88,15 @@ typedef struct
     char symbol;
 
 } Object;
+
+typedef struct 
+{
+    int trail_pixel_position;
+    char slope_pixel_position;
+    double depth_pixel_position;
+    
+} Motion_trail;
+
 
 typedef struct
 {
@@ -153,6 +162,7 @@ void simulate(Object *sim_log, Object initial_objects[], Object objects[], int t
 
 // rendering
 void render_objects_static(Object *sim_log, int time_seconds);
+void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail trails[][200], double *closest_depth);
 char render_interactive(Object *sim_log, int time_seconds, bool have_time_control);
 void render_objects_playback(Object *sim_log, int start, int end);
 void rotate_render(Object *sim_log, int time_seconds);
@@ -177,6 +187,7 @@ void display_position(Object);
 void display_all_information(Object objects[]);
 void clear_input_buffer();
 void init_camera();
+void clear_screen() {printf("\033[2J\033[H"); };
 
 
 // ui
@@ -409,7 +420,6 @@ void simulate(Object *sim_log, Object initial_objects[], Object objects[], int t
 void render_objects_static(Object *sim_log, int time_seconds)
 {
 
-    printf("pixelsizeX: %lf", camera.pixel_size_x);
     Vec3 focused_object_offset = (Vec3){0.0f, 0.0f, 0.0f};
 
     // number of pixels from the middle to the end
@@ -418,16 +428,10 @@ void render_objects_static(Object *sim_log, int time_seconds)
 
     char *plane_str;
     Vec3 display_pixel[NO_OBJECTS];
-    int trail[NO_PIXELSX][NO_PIXELSY];
-    char slope_position[NO_PIXELSX][NO_PIXELSY];
 
-    int depths[NO_PIXELSX][NO_PIXELSY];
-    double closest = 0.0;
-
-    bool closest_initialised = false;
-
-
-    printf("cameraX: %lf", cameraX);
+    Motion_trail trails[200][200] = {0};
+    double closest_depth = 0.0;
+    calculate_motion_trails(sim_log, time_seconds, trails, &closest_depth);
 
     
     if (view_focused_object >= 0)
@@ -437,16 +441,8 @@ void render_objects_static(Object *sim_log, int time_seconds)
         focused_object_offset.z = -1 * get_log_data(sim_log, time_seconds)[view_focused_object].motion.position.z;
     }
 
-    
-    for (int x = 0; x < NO_PIXELSX; x++)
-    {
-        for (int y = 0; y < NO_PIXELSY; y++)
-        {
-            trail[x][y] = 0;
-            depths[x][y] = 0;
-        }
-    }
 
+    
     bool displayed = false;
     Vec3 unrot_display_position; // perceived location when displaying, unrotated
 
@@ -483,13 +479,17 @@ void render_objects_static(Object *sim_log, int time_seconds)
 
     }
 
+
+
+   
+
+    
+    /*
     int trailx;
     int traily;
-
     float ratio;
 
     // idea: introduce different colours for depth?
-
     
     for (int i = 0; i < (time_scale / log_step); i++)
     {
@@ -542,7 +542,7 @@ void render_objects_static(Object *sim_log, int time_seconds)
 
 
 
-            if (trailx >= 0 && trailx < NO_PIXELSX && traily >= 0 && traily < NO_PIXELSY && (depth_ratio_x > 0 && depth_ratio_y > 0))
+            if (trailx >= 0 && trailx < camera.no_pixelsX && traily >= 0 && traily < camera.no_pixelsY && (depth_ratio_x > 0 && depth_ratio_y > 0))
             {
                 Vec3 velocity;
                 Vec3 vrot;
@@ -555,28 +555,28 @@ void render_objects_static(Object *sim_log, int time_seconds)
 
                 if (!closest_initialised)
                 {
-                    closest = object_depth;
+                    closest_depth = object_depth;
                     closest_initialised = true;
                     printf("trailx: %d", trailx);
                     printf("traily: %d\n", traily);
                 }
-                else if (object_depth < closest)
+                else if (object_depth < closest_depth)
                 {
-                    closest = object_depth;
+                    closest_depth = object_depth;
                 }
 
                 
-                if (trail[trailx][traily] == 1)
+                if (trails[trailx][traily].trail_pixel_position == 1)
                 {
-                    if (object_depth < depths[trailx][traily])
+                    if (object_depth < trails[trailx][traily].depth_pixel_position)
                     {
-                        depths[trailx][traily] = object_depth;
+                        trails[trailx][traily].depth_pixel_position = object_depth;
                     }
                 }
                 else
                 {
-                    trail[trailx][traily] = 1;
-                    depths[trailx][traily] = object_depth;
+                    trails[trailx][traily].trail_pixel_position = 1;
+                    trails[trailx][traily].depth_pixel_position = object_depth;
                 } 
 
 
@@ -587,34 +587,45 @@ void render_objects_static(Object *sim_log, int time_seconds)
 
                 if (ratio > 4.0)
                 {
-                    slope_position[trailx][traily] = '|'; // steep upward
+                    trails[trailx][traily].slope_pixel_position = '|'; // steep upward
                 }
                 else if (ratio > 0.5)
                 {
-                    slope_position[trailx][traily] = '/'; // moderate upward
+                    trails[trailx][traily].slope_pixel_position = '/'; // moderate upward
                 }
                 else if (ratio > -0.5)
                 {
-                    slope_position[trailx][traily] = '='; // mostly horizontal
+                    trails[trailx][traily].slope_pixel_position = '='; // mostly horizontal
                 }
                 else if (ratio > -4.0)
                 {
-                    slope_position[trailx][traily] = '\\'; // moderate downward
+                    trails[trailx][traily].slope_pixel_position = '\\'; // moderate downward
                 }
                 else
                 {
-                    slope_position[trailx][traily] = '|'; // steep downward
+                    trails[trailx][traily].slope_pixel_position = '|'; // steep downward
                 }
 
             }
         }
     }
+    */
+    
     
     char frame[FRAME_BUFFER_SIZE];
     int idx = 0;
 
-    // Clear & home ANSI codes
-    idx += sprintf(&frame[idx], "\033[2J\033[H");
+
+    //printf("\033[?1049h"); // enter alt buffer (no flicker)
+    //printf("\033[?25l");   // hide cursor
+
+    // print over
+    idx += sprintf(&frame[idx], "\033[H");
+
+    //idx += sprintf(&frame[idx], "\033[H\033[J");  // home + clear to end
+
+    // hide cursor while rendering
+    printf("\033[?25l");
 
     // Header text
     idx += sprintf(&frame[idx], "\n\n%s", display_time(time_seconds));
@@ -645,13 +656,13 @@ void render_objects_static(Object *sim_log, int time_seconds)
             }
 
             // Draw trail with depth coloring
-            if (!drawn && trail[x][y] == 1)
+            if (!drawn && trails[x][y].trail_pixel_position == 1)
             {
-                char c = slope_position[x][y];
-                double d = depths[x][y];
+                char c = trails[x][y].slope_pixel_position;
+                double d = trails[x][y].depth_pixel_position;
                 
                 // Avoid divide-by-zero
-                double fraction = (closest > 1e-9) ? ((d - closest) / closest) : 0.0;
+                double fraction = (closest_depth > 1e-9) ? ((d - closest_depth) / closest_depth) : 0.0;
 
                 // Clamp to non-negative
                 if (fraction < 0) fraction = 0;
@@ -684,11 +695,150 @@ void render_objects_static(Object *sim_log, int time_seconds)
     // Print the entire frame at once
     printf("%s", frame);
 
+    // show cursor again
+    printf("\033[?25h");
 }
+
+
+void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail trails[][200], double *closest_depth)
+{
+
+    Vec3 focused_object_offset = (Vec3){0.0f,0.0f,0.0f};
+    bool closest_initialised = false;
+
+    int trailx;
+    int traily;
+    float ratio;
+
+    if (view_focused_object >= 0)
+    {
+        focused_object_offset.x = -1 * get_log_data(sim_log, time_seconds)[view_focused_object].motion.position.x;
+        focused_object_offset.y = -1 * get_log_data(sim_log, time_seconds)[view_focused_object].motion.position.y;
+        focused_object_offset.z = -1 * get_log_data(sim_log, time_seconds)[view_focused_object].motion.position.z;
+    }
+
+    for (int i = 0; i < (time_scale / log_step); i++)
+    {
+
+        Vec3 orbit_offset = (Vec3){0.0f,0.0f,0.0f};
+        Vec3 rot_display_position; // perceived location when dispalying, rotated
+        double object_depth;
+
+        if (motion_relative_to_object >= 0)
+        {
+            // movement relative to the object
+            orbit_offset.x = (-1 * get_log_data(sim_log, i * log_step)[motion_relative_to_object].motion.position.x) +
+                            get_log_data(sim_log, time_seconds)[motion_relative_to_object].motion.position.x;
+
+            orbit_offset.y = (-1 * get_log_data(sim_log, i * log_step)[motion_relative_to_object].motion.position.y) +
+                            get_log_data(sim_log, time_seconds)[motion_relative_to_object].motion.position.y;
+
+            orbit_offset.z = (-1 * get_log_data(sim_log, i * log_step)[motion_relative_to_object].motion.position.z) +
+                            get_log_data(sim_log, time_seconds)[motion_relative_to_object].motion.position.z;
+        }
+
+        for (int j = 0; j < NO_OBJECTS; j++)
+        {
+            
+            Vec3 object_position;
+            Vec3 unrot_display_position;
+            double depth_ratio_x;
+            double depth_ratio_y;
+            double object_angle_size_x;
+            double object_angle_size_y;
+
+            object_position = get_log_data(sim_log, i * log_step)[j].motion.position;
+
+            unrot_display_position.x = (object_position.x + focused_object_offset.x + orbit_offset.x) - camera.pivot_position.x;
+            unrot_display_position.y = (object_position.y + focused_object_offset.y + orbit_offset.y) - camera.pivot_position.y;
+            unrot_display_position.z = (object_position.z + focused_object_offset.z + orbit_offset.z) - camera.pivot_position.z;
+
+            rot_display_position = rotate_z_up(unrot_display_position, degrees.z, degrees.x);
+
+            object_depth = -rot_display_position.z + ((camera.view_size / 2) / zoom); // distance in metres from the camera to the object   
+
+            object_angle_size_x = 2 * atan((camera.pixel_size_x) / (object_depth * 2));
+            object_angle_size_y = 2 * atan((camera.pixel_size_y) / (object_depth * 2));
+            
+            depth_ratio_x = camera.angular_resolution_x / object_angle_size_x;
+            depth_ratio_y = camera.angular_resolution_y / object_angle_size_y;
+
+            trailx = (int)((rot_display_position.x / (camera.pixel_size_x * depth_ratio_x)) + (camera.no_pixelsX / 2));
+            traily = (int)((camera.no_pixelsY) - ((rot_display_position.y / (camera.pixel_size_y * depth_ratio_y)) + (camera.no_pixelsY / 2)));
+
+
+
+            if (trailx >= 0 && trailx < NO_PIXELSX && traily >= 0 && traily < NO_PIXELSY && (depth_ratio_x > 0 && depth_ratio_y > 0))
+            {
+                Vec3 velocity;
+                Vec3 vrot;
+
+                velocity.x = get_log_data(sim_log, i * log_step)[j].motion.velocity.x;
+                velocity.y = get_log_data(sim_log, i * log_step)[j].motion.velocity.y;
+                velocity.z = get_log_data(sim_log, i * log_step)[j].motion.velocity.z;
+
+                vrot = rotate_z_up(velocity, degrees.z, degrees.x);
+
+                if (!closest_initialised)
+                {
+                    *closest_depth = object_depth;
+                    closest_initialised = true;
+                }
+                else if (object_depth < *closest_depth)
+                {
+                    *closest_depth = object_depth;
+                }
+
+                
+                if (trails[trailx][traily].trail_pixel_position == 1)
+                {
+                    if (object_depth < trails[trailx][traily].depth_pixel_position)
+                    {
+                        trails[trailx][traily].depth_pixel_position = object_depth;
+                    }
+                }
+                else
+                {
+                    trails[trailx][traily].trail_pixel_position = 1;
+                    trails[trailx][traily].depth_pixel_position = object_depth;
+                }
+
+
+                if (fabs(vrot.x) < 1e-6)
+                    vrot.x = 1e-6; // avoid division by zero
+                ratio = vrot.y / vrot.x;
+
+                if (ratio > 4.0)
+                {
+                    trails[trailx][traily].slope_pixel_position = '|'; // steep upward
+                }
+                else if (ratio > 0.5)
+                {
+                    trails[trailx][traily].slope_pixel_position = '/'; // moderate upward
+                }
+                else if (ratio > -0.5)
+                {
+                    trails[trailx][traily].slope_pixel_position = '='; // mostly horizontal
+                }
+                else if (ratio > -4.0)
+                {
+                    trails[trailx][traily].slope_pixel_position = '\\'; // moderate downward
+                }
+                else
+                {
+                    trails[trailx][traily].slope_pixel_position = '|'; // steep downward
+                }
+
+            }
+        }
+    }
+
+}
+
 
 // interactive version of the advanced renderer at a snapshot
 char render_interactive(Object *sim_log, int time_seconds, bool have_time_control)
-{
+{   
 
     double extra_move = 1;
     char input_str[32];
@@ -704,7 +854,10 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         if (have_time_control)
             printf("[ TIME: ENTER > | b < ]   ");
 
-        printf("[ ZOOM: - | z0 | + ]   [ QUIT ]");
+        printf("[ ZOOM: - | z0 | + ]   [ QUIT ]\n");
+
+        // clears current line
+        printf("\033[2K");
 
         if (fgets(input_str, sizeof(input_str), stdin) == NULL)
             return '1';
@@ -1158,6 +1311,7 @@ int simulation_ui(Object *sim_log, Object initial_objects[], Object objects[])
         {
 
         case 1:
+            clear_screen();
             render_interactive(sim_log, 0, false);
             //render_objects_static(sim_log, 0, 0, time_scale);
             break;
@@ -1191,7 +1345,7 @@ int simulation_ui(Object *sim_log, Object initial_objects[], Object objects[])
             time_seconds_end = (days * DAY) + (hours * HOUR) + (minutes * MINUTE);
             clear_input_buffer();
 
-            //render_objects_playback(sim_log, time_seconds_start, time_seconds_end);
+            clear_screen();
             render_objects_playback(sim_log, time_seconds_start, time_seconds_end);
             break;
 
