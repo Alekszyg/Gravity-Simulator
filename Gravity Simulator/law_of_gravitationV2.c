@@ -101,7 +101,17 @@ typedef struct
     double pixel_size_y;
     double angular_resolution_x;
     double angular_resolution_y;
+    double pixel_aspect_ratio; // pixel width divide height
+    double view_aspect_ratio; // view width divide height
 } Camera;
+
+
+typedef struct Chunk
+{
+    struct Chunk *child[2][2][2];
+
+} Chunk;
+
 
 
 #define NO_PIXELSX 32
@@ -113,8 +123,10 @@ Camera camera = {
     .pivot_position = {0.0f, 0.0f, 0.0f},
     .zoom = 1.0,
     .view_size = 8e8,
-    .no_pixelsX = NO_PIXELSX,
-    .no_pixelsY = NO_PIXELSY,
+    .no_pixelsX = 32,
+    .no_pixelsY = 40,
+    .pixel_aspect_ratio = 1.2,
+    .view_aspect_ratio = 1
 };
 
 
@@ -164,6 +176,7 @@ double calculate_resolution();
 void display_position(Object);
 void display_all_information(Object objects[]);
 void clear_input_buffer();
+void init_camera();
 
 
 // ui
@@ -222,8 +235,9 @@ int main()
     */
 
     memcpy(initial_objects, objects, sizeof(objects));
-
+    
     // set initial values
+    init_camera();
     simulate(simulation_log, initial_objects, objects, time_scale);
     render_interactive(simulation_log, 0, false);
     program_ui(simulation_log, initial_objects, objects);
@@ -394,16 +408,9 @@ void simulate(Object *sim_log, Object initial_objects[], Object objects[], int t
 // renders all the objects in ASCII in a given area
 void render_objects_static(Object *sim_log, int time_seconds)
 {
-    //camera.angular_resolution_x = 2 * atan((1.07e9 / camera.no_pixelsX) / camera.view_size);
-    camera.angular_resolution_x = 2 * atan(1.0 / camera.no_pixelsX);
-    camera.angular_resolution_y = camera.angular_resolution_x * ((double)camera.no_pixelsX / camera.no_pixelsY);
-
-    camera.pixel_size_x = camera.view_size / camera.no_pixelsX;
-    camera.pixel_size_y = camera.view_size / camera.no_pixelsY;
 
     printf("pixelsizeX: %lf", camera.pixel_size_x);
     Vec3 focused_object_offset = (Vec3){0.0f, 0.0f, 0.0f};
-
 
     // number of pixels from the middle to the end
     int half_screen_sizeX = camera.no_pixelsX / 2;
@@ -1078,6 +1085,25 @@ void clear_input_buffer()
     while ((c = getchar()) != '\n' && c != EOF)
         ;
 }
+
+
+// initialised camera variables
+void init_camera()
+{
+    camera.no_pixelsX = (camera.no_pixelsY / camera.pixel_aspect_ratio) * camera.view_aspect_ratio;
+
+    camera.angular_resolution_x = 2 * atan(1.0 / camera.no_pixelsX);
+    camera.angular_resolution_y = camera.angular_resolution_x * ((double)camera.no_pixelsX / camera.no_pixelsY);
+
+    camera.pixel_size_x = camera.view_size / camera.no_pixelsX;
+    camera.pixel_size_y = camera.view_size / camera.no_pixelsY;
+
+}
+
+
+
+
+
 
 /*
     ui
