@@ -134,7 +134,7 @@ Camera camera = {
     .view_size = 8e8,
     .no_pixelsX = 32,
     .no_pixelsY = 40,
-    .pixel_aspect_ratio = 1.2,
+    .pixel_aspect_ratio = 1.22,
     .view_aspect_ratio = 1
 };
 
@@ -768,7 +768,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
 
 
-            if (trailx >= 0 && trailx < NO_PIXELSX && traily >= 0 && traily < NO_PIXELSY && (depth_ratio_x > 0 && depth_ratio_y > 0))
+            if (trailx >= 0 && trailx < camera.no_pixelsX && traily >= 0 && traily < camera.no_pixelsY && (depth_ratio_x > 0 && depth_ratio_y > 0))
             {
                 Vec3 velocity;
                 Vec3 vrot;
