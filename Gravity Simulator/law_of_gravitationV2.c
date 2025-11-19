@@ -24,6 +24,8 @@ Start Date: 24/10/2025
 #define NO_OBJECTS 3
 const double GRAVITATIONAL_CONSTANT = 6.67430e-11;
 #define M_PI 3.14159265358979323846
+#define DEG_TO_RAD (M_PI / 180.0)
+#define RAD_TO_DEG (180.0 / M_PI)
 
 // simulation configuration
 int delta_time = MINUTE;     // simulaton step duration
@@ -49,17 +51,9 @@ enum Planes
 // NO_PIXELSX / NO_PIXELSY = 0.81 for square grid
 int render_step = DAY;   // how often rendering occurs
 bool render_wait = true; // pause after each render
-float zoom = 1;          // render zoom level
-double view_offsetX = 0;
-double view_offsetY = 0;
-double view_offsetZ = 0;
-double cameraX = 0;
-double cameraY = 0;
 
 
-
-
-int view_focused_object = -1;      // what object is the view focused on
+int view_focused_object = 0;      // what object is the view focused on
 int motion_relative_to_object = 0; // what object is the view focused on; // displays motion relative to this object
 
 
@@ -101,15 +95,27 @@ typedef struct
 typedef struct
 {
     Vec3 pivot_position;
+    double distance_from_pivot;
 
     double zoom;
-    double view_size;
+
+    // degrees
+    double fov_x;
+    double fov_y;
+
+    double view_size_x;
+    double view_size_y;
+
     int no_pixelsX;
     int no_pixelsY;
+
     double pixel_size_x;
     double pixel_size_y;
+
+    // radians
     double angular_resolution_x;
     double angular_resolution_y;
+
     double pixel_aspect_ratio; // pixel width divide height
     double view_aspect_ratio; // view width divide height
 } Camera;
@@ -130,14 +136,15 @@ typedef struct Chunk
 
 Camera camera = {
     .pivot_position = {0.0f, 0.0f, 0.0f},
+    .distance_from_pivot = 4e8,
+    .fov_y = 120,
     .zoom = 1.0,
-    .view_size = 8e8,
+    .view_size_y = 8e8,
     .no_pixelsX = 32,
     .no_pixelsY = 40,
     .pixel_aspect_ratio = 1.22,
-    .view_aspect_ratio = 1
+    .view_aspect_ratio = 2
 };
-
 
 
 
@@ -426,7 +433,6 @@ void render_objects_static(Object *sim_log, int time_seconds)
     int half_screen_sizeX = camera.no_pixelsX / 2;
     int half_screen_sizeY = camera.no_pixelsY / 2;
 
-    char *plane_str;
     Vec3 display_pixel[NO_OBJECTS];
 
     Motion_trail trails[200][200] = {0};
@@ -450,8 +456,7 @@ void render_objects_static(Object *sim_log, int time_seconds)
     {
         Vec3 object_position;
         Vec3 rot_display_position; // perceived location when dispalying, rotated
-        double depth_ratio_x;
-        double depth_ratio_y;
+        double depth_ratio;
         double object_angle_size_x;
         double object_angle_size_y;
 
@@ -463,153 +468,20 @@ void render_objects_static(Object *sim_log, int time_seconds)
 
         rot_display_position = rotate_z_up(unrot_display_position, degrees.z, degrees.x);
 
-        double object_depth = -rot_display_position.z + ((camera.view_size / 2) / zoom); // distance in metres from the camera to the object
+        double object_depth = -rot_display_position.z + (camera.distance_from_pivot / camera.zoom); // distance in metres from the camera to the object
 
         object_angle_size_x = 2 * atan((camera.pixel_size_x) / (object_depth * 2));
         object_angle_size_y = 2 * atan((camera.pixel_size_y) / (object_depth * 2));
 
-        depth_ratio_x = camera.angular_resolution_x / object_angle_size_x;
-        depth_ratio_y = camera.angular_resolution_y / object_angle_size_y;
+        depth_ratio = camera.angular_resolution_y / object_angle_size_y;
 
-        if (depth_ratio_x > 0 && depth_ratio_y > 0)
+        if (depth_ratio > 0)
         {
-            display_pixel[i].x = (int)((rot_display_position.x / (camera.pixel_size_x * depth_ratio_x)) + (half_screen_sizeX));
-            display_pixel[i].y = (int)((camera.no_pixelsY) - ((rot_display_position.y / (camera.pixel_size_y * depth_ratio_y )) + (half_screen_sizeY)));
+            display_pixel[i].x = (int)((rot_display_position.x / (camera.pixel_size_x * depth_ratio)) + (half_screen_sizeX));
+            display_pixel[i].y = (int)((camera.no_pixelsY) - ((rot_display_position.y / (camera.pixel_size_y * depth_ratio )) + (half_screen_sizeY)));
         }
 
     }
-
-
-
-   
-
-    
-    /*
-    int trailx;
-    int traily;
-    float ratio;
-
-    // idea: introduce different colours for depth?
-    
-    for (int i = 0; i < (time_scale / log_step); i++)
-    {
-        
-        Vec3 orbit_offset = (Vec3){0.0f,0.0f,0.0f};
-        Vec3 rot_display_position; // perceived location when dispalying, rotated
-        double object_depth;
-
-        if (motion_relative_to_object >= 0)
-        {
-            // movement relative to the object
-            orbit_offset.x = (-1 * get_log_data(sim_log, i * log_step)[motion_relative_to_object].motion.position.x) +
-                            get_log_data(sim_log, time_seconds)[motion_relative_to_object].motion.position.x;
-
-            orbit_offset.y = (-1 * get_log_data(sim_log, i * log_step)[motion_relative_to_object].motion.position.y) +
-                            get_log_data(sim_log, time_seconds)[motion_relative_to_object].motion.position.y;
-
-            orbit_offset.z = (-1 * get_log_data(sim_log, i * log_step)[motion_relative_to_object].motion.position.z) +
-                            get_log_data(sim_log, time_seconds)[motion_relative_to_object].motion.position.z;
-        }
-
-        for (int j = 0; j < NO_OBJECTS; j++)
-        {
-            
-            Vec3 object_position;
-            Vec3 unrot_display_position;
-            double depth_ratio_x;
-            double depth_ratio_y;
-            double object_angle_size_x;
-            double object_angle_size_y;
-
-            object_position = get_log_data(sim_log, i * log_step)[j].motion.position;
-
-            unrot_display_position.x = (object_position.x + focused_object_offset.x + orbit_offset.x) - camera.pivot_position.x;
-            unrot_display_position.y = (object_position.y + focused_object_offset.y + orbit_offset.y) - camera.pivot_position.y;
-            unrot_display_position.z = (object_position.z + focused_object_offset.z + orbit_offset.z) - camera.pivot_position.z;
-
-            rot_display_position = rotate_z_up(unrot_display_position, degrees.z, degrees.x);
-
-            object_depth = -rot_display_position.z + ((camera.view_size / 2) / zoom); // distance in metres from the camera to the object   
-
-            object_angle_size_x = 2 * atan((camera.pixel_size_x) / (object_depth * 2));
-            object_angle_size_y = 2 * atan((camera.pixel_size_y) / (object_depth * 2));
-            
-            depth_ratio_x = camera.angular_resolution_x / object_angle_size_x;
-            depth_ratio_y = camera.angular_resolution_y / object_angle_size_y;
-
-            trailx = (int)((rot_display_position.x / (camera.pixel_size_x * depth_ratio_x)) + (half_screen_sizeX));
-            traily = (int)((camera.no_pixelsY) - ((rot_display_position.y / (camera.pixel_size_y * depth_ratio_y)) + (half_screen_sizeY)));
-
-
-
-            if (trailx >= 0 && trailx < camera.no_pixelsX && traily >= 0 && traily < camera.no_pixelsY && (depth_ratio_x > 0 && depth_ratio_y > 0))
-            {
-                Vec3 velocity;
-                Vec3 vrot;
-
-                velocity.x = get_log_data(sim_log, i * log_step)[j].motion.velocity.x;
-                velocity.y = get_log_data(sim_log, i * log_step)[j].motion.velocity.y;
-                velocity.z = get_log_data(sim_log, i * log_step)[j].motion.velocity.z;
-
-                vrot = rotate_z_up(velocity, degrees.z, degrees.x);
-
-                if (!closest_initialised)
-                {
-                    closest_depth = object_depth;
-                    closest_initialised = true;
-                    printf("trailx: %d", trailx);
-                    printf("traily: %d\n", traily);
-                }
-                else if (object_depth < closest_depth)
-                {
-                    closest_depth = object_depth;
-                }
-
-                
-                if (trails[trailx][traily].trail_pixel_position == 1)
-                {
-                    if (object_depth < trails[trailx][traily].depth_pixel_position)
-                    {
-                        trails[trailx][traily].depth_pixel_position = object_depth;
-                    }
-                }
-                else
-                {
-                    trails[trailx][traily].trail_pixel_position = 1;
-                    trails[trailx][traily].depth_pixel_position = object_depth;
-                } 
-
-
-
-                if (fabs(vrot.x) < 1e-6)
-                    vrot.x = 1e-6; // avoid division by zero
-                ratio = vrot.y / vrot.x;
-
-                if (ratio > 4.0)
-                {
-                    trails[trailx][traily].slope_pixel_position = '|'; // steep upward
-                }
-                else if (ratio > 0.5)
-                {
-                    trails[trailx][traily].slope_pixel_position = '/'; // moderate upward
-                }
-                else if (ratio > -0.5)
-                {
-                    trails[trailx][traily].slope_pixel_position = '='; // mostly horizontal
-                }
-                else if (ratio > -4.0)
-                {
-                    trails[trailx][traily].slope_pixel_position = '\\'; // moderate downward
-                }
-                else
-                {
-                    trails[trailx][traily].slope_pixel_position = '|'; // steep downward
-                }
-
-            }
-        }
-    }
-    */
     
     
     char frame[FRAME_BUFFER_SIZE];
@@ -629,9 +501,9 @@ void render_objects_static(Object *sim_log, int time_seconds)
 
     // Header text
     idx += sprintf(&frame[idx], "\n\n%s", display_time(time_seconds));
-    idx += sprintf(&frame[idx], "\n|   ZOOM: \033[36m%4.3fx\033[0m   ", zoom);
-    idx += sprintf(&frame[idx], "|   RESOLUTION: \033[36m%s\033[0m   ", format_number(camera.pixel_size_x / zoom));
-    idx += sprintf(&frame[idx], "|   WIDTH: \033[36m%s\033[0m   |", format_number((camera.view_size) / zoom));
+    idx += sprintf(&frame[idx], "\n|   ZOOM: \033[36m%4.3fx\033[0m   ", camera.zoom);
+    idx += sprintf(&frame[idx], "|   RESOLUTION: \033[36m%s\033[0m   ", format_number(camera.pixel_size_x / camera.zoom));
+    idx += sprintf(&frame[idx], "|   WIDTH: \033[36m%s\033[0m   |", format_number((camera.view_size_y) / camera.zoom));
     idx += sprintf(&frame[idx], "   YAW: \033[36m%3d\033[0m | PITCH: \033[36m%3d\033[0m   |\n", (int)degrees.z % 360, (int)degrees.x % 360);
 
 
@@ -742,8 +614,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
             
             Vec3 object_position;
             Vec3 unrot_display_position;
-            double depth_ratio_x;
-            double depth_ratio_y;
+            double depth_ratio;
             double object_angle_size_x;
             double object_angle_size_y;
 
@@ -755,20 +626,19 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
             rot_display_position = rotate_z_up(unrot_display_position, degrees.z, degrees.x);
 
-            object_depth = -rot_display_position.z + ((camera.view_size / 2) / zoom); // distance in metres from the camera to the object   
+            object_depth = -rot_display_position.z + (camera.distance_from_pivot / camera.zoom); // distance in metres from the camera to the object   
 
             object_angle_size_x = 2 * atan((camera.pixel_size_x) / (object_depth * 2));
             object_angle_size_y = 2 * atan((camera.pixel_size_y) / (object_depth * 2));
             
-            depth_ratio_x = camera.angular_resolution_x / object_angle_size_x;
-            depth_ratio_y = camera.angular_resolution_y / object_angle_size_y;
+            depth_ratio = camera.angular_resolution_y / object_angle_size_y;
 
-            trailx = (int)((rot_display_position.x / (camera.pixel_size_x * depth_ratio_x)) + (camera.no_pixelsX / 2));
-            traily = (int)((camera.no_pixelsY) - ((rot_display_position.y / (camera.pixel_size_y * depth_ratio_y)) + (camera.no_pixelsY / 2)));
-
+            trailx = (int)((rot_display_position.x / (camera.pixel_size_x * depth_ratio)) + (camera.no_pixelsX / 2));
+            traily = (int)((camera.no_pixelsY) - ((rot_display_position.y / (camera.pixel_size_y * depth_ratio)) + (camera.no_pixelsY / 2)));
 
 
-            if (trailx >= 0 && trailx < camera.no_pixelsX && traily >= 0 && traily < camera.no_pixelsY && (depth_ratio_x > 0 && depth_ratio_y > 0))
+
+            if (trailx >= 0 && trailx < camera.no_pixelsX && traily >= 0 && traily < camera.no_pixelsY && depth_ratio > 0)
             {
                 Vec3 velocity;
                 Vec3 vrot;
@@ -854,7 +724,7 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         if (have_time_control)
             printf("[ TIME: ENTER > | b < ]   ");
 
-        printf("[ ZOOM: - | z0 | + ]   [ QUIT ]\n");
+        printf("[ ZOOM: - | zX | + ]   [ YAW: yX | PITCH: pX ]   [ QUIT: -1 ]\n");
 
         // clears current line
         printf("\033[2K");
@@ -876,15 +746,15 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         }
         else if (strcmp(input_str, "+") == 0)
         {
-            zoom *= 2;
+            camera.zoom *= 2;
         }
         else if (strcmp(input_str, "-") == 0)
         {
-            zoom /= 2;
+            camera.zoom /= 2;
         }
         else if (input_str[0] == 'z')
         {
-            zoom = pow(2, atof(input_str + 1));
+            camera.zoom = pow(2, atof(input_str + 1));
         }
         else if (strcmp(input_str, "i") == 0)
         {
@@ -959,25 +829,22 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
             pan_camera((Vec3){-1,0,0}, extra_move * calculate_resolution(), -degrees.x, -degrees.z);
 
         }
-        else if(strncmp(input_str, "yaw", 3) == 0)
+        else if(input_str[0] == 'y')
         {
-            int result = atoi(input_str + 3);
-            if (result == 0)
+            if (strlen(input_str) == 1)
                 degrees.z = 0;
             else
-                degrees.z += atoi(input_str + 3);
+                degrees.z += atoi(input_str + 1);
 
         }
-        else if(strncmp(input_str, "pitch", 5) == 0)
+        else if(input_str[0] == 'p')
         {
-            int result = atoi(input_str + 5);
-            if (result == 0)
+            if (strlen(input_str) == 1)
                 degrees.x = 0;
             else
-                degrees.x += atoi(input_str + 5);
+                degrees.x += atoi(input_str + 1);
 
         }
-        
         else if(strcmp(input_str, "rotate") == 0)
         {
             rotate_render(sim_log, time_seconds);
@@ -1172,7 +1039,7 @@ double calculate_resolution()
 {
     int half_screen_sizeX = NO_PIXELSX / 2;
 
-    return ((double)RENDER_SIZE / half_screen_sizeX) / zoom;
+    return ((double)RENDER_SIZE / half_screen_sizeX) / camera.zoom;
 
 }
 
@@ -1243,13 +1110,23 @@ void clear_input_buffer()
 // initialised camera variables
 void init_camera()
 {
-    camera.no_pixelsX = (camera.no_pixelsY / camera.pixel_aspect_ratio) * camera.view_aspect_ratio;
+    camera.no_pixelsX = camera.no_pixelsY * (camera.view_aspect_ratio / camera.pixel_aspect_ratio);
+    
 
-    camera.angular_resolution_x = 2 * atan(1.0 / camera.no_pixelsX);
-    camera.angular_resolution_y = camera.angular_resolution_x * ((double)camera.no_pixelsX / camera.no_pixelsY);
+    camera.fov_x = 2.0 * atan( tan(camera.fov_y * DEG_TO_RAD / 2.0 ) * camera.view_aspect_ratio ) * RAD_TO_DEG;
 
-    camera.pixel_size_x = camera.view_size / camera.no_pixelsX;
-    camera.pixel_size_y = camera.view_size / camera.no_pixelsY;
+
+    camera.view_size_x = 2 * (tan(camera.fov_x * DEG_TO_RAD / 2) * camera.distance_from_pivot);
+    camera.view_size_y = 2 * (tan(camera.fov_y * DEG_TO_RAD / 2) * camera.distance_from_pivot);
+
+    printf("camera fov x: %lf", camera.fov_x);
+    printf("camera fov y: %lf", camera.fov_y);
+
+    camera.angular_resolution_x = camera.fov_x * DEG_TO_RAD / camera.no_pixelsX;
+    camera.angular_resolution_y = camera.fov_y * DEG_TO_RAD / camera.no_pixelsY;
+
+    camera.pixel_size_x = camera.view_size_x / camera.no_pixelsX;
+    camera.pixel_size_y = camera.view_size_y / camera.no_pixelsY;
 
 }
 
@@ -1495,11 +1372,11 @@ int render_settings_ui()
 
         case 2:
             printf("\nZoom level refers to how zoomed in the images are rendered\n");
-            printf("The current zoom level is: %d", zoom);
+            printf("The current zoom level is: %d", camera.zoom);
             printf("\nWhat do you want the zoom level to be?\n");
-            scanf("%d", &zoom);
+            scanf("%d", &camera.zoom);
 
-            printf("\nZoom level reassigned successfully! Zoom step is %d\n", zoom);
+            printf("\nZoom level reassigned successfully! Zoom step is %d\n", camera.zoom);
             break;
 
         case 3:
