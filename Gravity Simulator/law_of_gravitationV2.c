@@ -139,7 +139,7 @@ Camera camera = {
     .view_size_y = 8e8,
     .no_pixelsY = 40,
     .pixel_aspect_ratio = 1.22,
-    .view_aspect_ratio = 2
+    .view_aspect_ratio = 1.3
 };
 
 
