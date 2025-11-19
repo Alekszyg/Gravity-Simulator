@@ -46,8 +46,6 @@ enum Planes
     XZ
 };
 
-// render configuration
-#define RENDER_SIZE 400000000 // 400 million metres (half-width of view)
 // NO_PIXELSX / NO_PIXELSY = 0.81 for square grid
 int render_step = DAY;   // how often rendering occurs
 bool render_wait = true; // pause after each render
@@ -55,6 +53,7 @@ bool render_wait = true; // pause after each render
 
 int view_focused_object = 0;      // what object is the view focused on
 int motion_relative_to_object = 0; // what object is the view focused on; // displays motion relative to this object
+char space_character = '.'; // the character used to fill empty space 
 
 
 int plane = XY; //
@@ -129,8 +128,6 @@ typedef struct Chunk
 
 
 
-#define NO_PIXELSX 32
-#define NO_PIXELSY 40
 
 
 
@@ -140,7 +137,6 @@ Camera camera = {
     .fov_y = 120,
     .zoom = 1.0,
     .view_size_y = 8e8,
-    .no_pixelsX = 32,
     .no_pixelsY = 40,
     .pixel_aspect_ratio = 1.22,
     .view_aspect_ratio = 2
@@ -557,7 +553,7 @@ void render_objects_static(Object *sim_log, int time_seconds)
             // Empty pixel
             if (!drawn)
             {
-                idx += sprintf(&frame[idx], " . ");
+                idx += sprintf(&frame[idx], " %c ", space_character);
             }
         }
 
@@ -724,7 +720,7 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         if (have_time_control)
             printf("[ TIME: ENTER > | b < ]   ");
 
-        printf("[ ZOOM: - | zX | + ]   [ YAW: yX | PITCH: pX ]   [ QUIT: -1 ]\n");
+        printf("[ ZOOM: - | zX | + ]   [ YAW: yX | PITCH: pX ]   [ UP: w | DOWN: s | LEFT: a | RIGHT: d ]   [ QUIT: -1 ]\n");
 
         // clears current line
         printf("\033[2K");
@@ -858,7 +854,7 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
             // Unrecognized input
         }
 
-        extra_move = 1;
+        extra_move = 2;
     }
 }
 
@@ -1037,9 +1033,8 @@ char *format_number(double number)
 
 double calculate_resolution()
 {
-    int half_screen_sizeX = NO_PIXELSX / 2;
 
-    return ((double)RENDER_SIZE / half_screen_sizeX) / camera.zoom;
+    return (camera.pixel_size_y / camera.zoom);
 
 }
 
