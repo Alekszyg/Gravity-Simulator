@@ -139,7 +139,7 @@ Camera camera = {
     .view_size_y = 8e8,
     .no_pixelsY = 40,
     .pixel_aspect_ratio = 1.22,
-    .view_aspect_ratio = 1.3
+    .view_aspect_ratio = 1.4
 };
 
 
@@ -253,6 +253,7 @@ int main()
     // set initial values
     init_camera();
     simulate(simulation_log, initial_objects, objects, time_scale);
+    clear_screen();
     render_interactive(simulation_log, 0, false);
     program_ui(simulation_log, initial_objects, objects);
     
