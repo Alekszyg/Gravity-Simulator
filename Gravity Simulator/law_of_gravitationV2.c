@@ -53,7 +53,7 @@ bool render_wait = true; // pause after each render
 
 int view_focused_object = 0;      // what object is the view focused on
 int motion_relative_to_object = 0; // what object is the view focused on; // displays motion relative to this object
-char space_character = '.'; // the character used to fill empty space 
+char space_character = ' '; // the character used to fill empty space 
 
 
 int plane = XY; //
@@ -137,7 +137,7 @@ Camera camera = {
     .fov_y = 120,
     .zoom = 1.0,
     .view_size_y = 8e8,
-    .no_pixelsY = 40,
+    .no_pixelsY = 80,
     .pixel_aspect_ratio = 1.22,
     .view_aspect_ratio = 1.4
 };
@@ -220,14 +220,14 @@ int main()
     // Earth - orbiting speed 30,000
     objects[0].mass = 5.972e24; // kg
     objects[0].motion.position = (Vec3){0.0f, 0.0f, 0.0};
-    objects[0].motion.velocity = (Vec3){0.0f, 0.0f, 0.0f};
+    objects[0].motion.velocity = (Vec3){3000.0f, 0.0f, 0.0f};
     objects[0].motion.force = (Vec3){0.0f, 0.0f, 0.0f};
     objects[0].symbol = 'E';
 
     // Moon
     objects[1].mass = 7.348e22;                                    // kg
     objects[1].motion.position = (Vec3){384400000.0f, 0.0f, 0.0f}; // meters from Earth
-    objects[1].motion.velocity = (Vec3){0.0f, 1022.0f, 0.0f};      // m/s (orbital speed)
+    objects[1].motion.velocity = (Vec3){-1200.0f, 600.0f, 0.0f};      // m/s 1022(orbital speed)
     objects[1].motion.force = (Vec3){0.0f, 0.0f, 0.0f};            // m/s (orbital speed)
     // moon orbital speed 1022.0f
     objects[1].symbol = 'M';
@@ -569,6 +569,7 @@ void render_objects_static(Object *sim_log, int time_seconds)
 }
 
 
+// extremely inefficient - calculates every single frame
 void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail trails[][200], double *closest_depth)
 {
 
