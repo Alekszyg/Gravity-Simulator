@@ -603,7 +603,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
         focused_object_offset.z = -log_now[view_focused_object].motion.position.z;
     }
 
-    for (int i = 0; i < (time_scale / log_step); i++)
+    for (int i = 0; i < (time_scale / log_step); i+=10)
     {
 
         Object *log_i = get_log_data(sim_log, i * log_step);
@@ -641,7 +641,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
             speed = velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
             
-            int skip = (int)(1e8 / speed);
+            int skip = (int)(1e7 / speed);
             if (skip < 1) skip = 1;
 
             if((i % skip) != 0)
