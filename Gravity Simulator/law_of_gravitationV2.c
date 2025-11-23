@@ -11,6 +11,7 @@ Start Date: 24/10/2025
 #include <math.h>
 #include <stdbool.h>
 #include <windows.h>
+#include <time.h>
 
 #define FRAME_BUFFER_SIZE 20000
 
@@ -90,6 +91,12 @@ typedef struct
     
 } Motion_trail;
 
+typedef struct
+{
+    Vec3 position;
+    int is_set;
+} Motion_element;
+
 
 typedef struct
 {
@@ -118,6 +125,7 @@ typedef struct
     double pixel_aspect_ratio; // pixel width divide height
     double view_aspect_ratio; // view width divide height
 } Camera;
+bool reset_interpolation = false;
 
 
 typedef struct Chunk
@@ -135,9 +143,9 @@ Camera camera = {
     .pivot_position = {0.0f, 0.0f, 0.0f},
     .distance_from_pivot = 4e8,
     .fov_y = 120,
-    .zoom = 1.0,
+    .zoom = 5,
     .view_size_y = 8e8,
-    .no_pixelsY = 80,
+    .no_pixelsY = 40,
     .pixel_aspect_ratio = 1.22,
     .view_aspect_ratio = 1.4
 };
@@ -166,11 +174,13 @@ void simulate(Object *sim_log, Object initial_objects[], Object objects[], int t
 // rendering
 void render_objects_static(Object *sim_log, int time_seconds);
 void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail trails[][200], double *closest_depth);
+void log_motion_trails(Object *sim_log, int time_seconds, Motion_element * motion_log);
 char render_interactive(Object *sim_log, int time_seconds, bool have_time_control);
 void render_objects_playback(Object *sim_log, int start, int end);
 void rotate_render(Object *sim_log, int time_seconds);
 Vec3 rotate_z_up(Vec3 v, double spin_deg, double pitch_deg);
 void pan_camera(Vec3, double move, double pitch, double yaw);
+Mat3 camera_rot_matrix(double spin_deg, double pitch_deg);
 
 Vec3 mat3_multiply_vec3(Mat3 mat, Vec3 vec);
 
@@ -202,6 +212,10 @@ int render_settings_ui();
 void intro();
 void menu_banner(int menu);
 
+
+
+
+
 int main()
 {
     Object objects[NO_OBJECTS];
@@ -209,6 +223,9 @@ int main()
 
     int rows = time_scale / log_step;
     int cols = NO_OBJECTS;
+
+    Motion_element *all_positions = malloc(rows * cols * sizeof(Motion_element));
+    memset(all_positions, 0, sizeof(Motion_element) * rows * cols);
 
     Object *simulation_log = malloc(rows * cols * sizeof(Object));
     if (!simulation_log)
@@ -220,14 +237,14 @@ int main()
     // Earth - orbiting speed 30,000
     objects[0].mass = 5.972e24; // kg
     objects[0].motion.position = (Vec3){0.0f, 0.0f, 0.0};
-    objects[0].motion.velocity = (Vec3){3000.0f, 0.0f, 0.0f};
+    objects[0].motion.velocity = (Vec3){0.0f, 0.0f, 0.0f};
     objects[0].motion.force = (Vec3){0.0f, 0.0f, 0.0f};
     objects[0].symbol = 'E';
 
     // Moon
     objects[1].mass = 7.348e22;                                    // kg
     objects[1].motion.position = (Vec3){384400000.0f, 0.0f, 0.0f}; // meters from Earth
-    objects[1].motion.velocity = (Vec3){-1200.0f, 600.0f, 0.0f};      // m/s 1022(orbital speed)
+    objects[1].motion.velocity = (Vec3){0.0f, 1022.0f, 0.0f};      // m/s 1022(orbital speed)
     objects[1].motion.force = (Vec3){0.0f, 0.0f, 0.0f};            // m/s (orbital speed)
     // moon orbital speed 1022.0f
     objects[1].symbol = 'M';
@@ -572,13 +589,33 @@ void render_objects_static(Object *sim_log, int time_seconds)
 // extremely inefficient - calculates every single frame
 void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail trails[][200], double *closest_depth)
 {
+    Mat3 R = camera_rot_matrix(degrees.z, degrees.x);
+    static int previous_trailx[NO_OBJECTS] = {0};
+    static int previous_traily[NO_OBJECTS] = {0};
 
+    static int has_previous[NO_OBJECTS] = {0};
+
+    /*
+    if (reset_interpolation)
+    {
+        for (int i = 0; i < NO_OBJECTS; i++)
+            has_previous[i] = 0;
+    }
+
+    */
+
+    double resolution = calculate_resolution() / (log_step * 2);
     Vec3 focused_object_offset = (Vec3){0.0f,0.0f,0.0f};
     bool closest_initialised = false;
 
     int trailx;
     int traily;
     float ratio;
+
+    Vec3 velocity;
+    Vec3 vrot;
+    double speed;
+
 
     if (view_focused_object >= 0)
     {
@@ -593,6 +630,8 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
         Vec3 orbit_offset = (Vec3){0.0f,0.0f,0.0f};
         Vec3 rot_display_position; // perceived location when dispalying, rotated
         double object_depth;
+
+        
 
         if (motion_relative_to_object >= 0)
         {
@@ -609,6 +648,17 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
         for (int j = 0; j < NO_OBJECTS; j++)
         {
+            velocity.x = get_log_data(sim_log, i * log_step)[j].motion.velocity.x;
+            velocity.y = get_log_data(sim_log, i * log_step)[j].motion.velocity.y;
+            velocity.z = get_log_data(sim_log, i * log_step)[j].motion.velocity.z;
+
+            speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z);
+            
+            int skip = (int)(resolution / speed);
+            if (skip < 1) skip = 1;
+
+            if((i % skip) != 0)
+                continue;
             
             Vec3 object_position;
             Vec3 unrot_display_position;
@@ -622,7 +672,9 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
             unrot_display_position.y = (object_position.y + focused_object_offset.y + orbit_offset.y) - camera.pivot_position.y;
             unrot_display_position.z = (object_position.z + focused_object_offset.z + orbit_offset.z) - camera.pivot_position.z;
 
-            rot_display_position = rotate_z_up(unrot_display_position, degrees.z, degrees.x);
+            //rot_display_position = rotate_z_up(unrot_display_position, degrees.z, degrees.x);
+            rot_display_position = mat3_multiply_vec3(R, unrot_display_position);
+
 
             object_depth = -rot_display_position.z + (camera.distance_from_pivot / camera.zoom); // distance in metres from the camera to the object   
 
@@ -697,6 +749,38 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
                     trails[trailx][traily].slope_pixel_position = '|'; // steep downward
                 }
 
+
+                /*
+                // skips if pixel on edge
+                if (has_previous[j] && (trailx > 3 && traily > 3) && (trailx < camera.no_pixelsX-3 && traily < camera.no_pixelsY-3))
+                {
+                    int dx = trailx - previous_trailx[j];
+                    int dy = traily - previous_traily[j];
+                    int steps = fmax(abs(dx), abs(dy)); // number of pixels to interpolate
+
+                    for (int k = 1; k <= steps; k++)
+                    {
+                        int interp_x = previous_trailx[j] + dx * k / steps;
+                        int interp_y = previous_traily[j] + dy * k / steps;
+
+                        // mark pixel in your trail
+                        trails[interp_x][interp_y].trail_pixel_position = 1;
+                        trails[interp_x][interp_y].slope_pixel_position = trails[trailx][traily].slope_pixel_position;
+                        trails[interp_x][interp_y].depth_pixel_position = trails[trailx][traily].depth_pixel_position;
+                        // optionally set depth, slope, etc.
+                    }
+        
+                }
+
+                
+
+                // update previous
+                previous_trailx[j] = trailx;
+                previous_traily[j] = traily;
+                has_previous[j] = true;
+                */
+                
+                
             }
         }
     }
@@ -704,19 +788,75 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 }
 
 
+
+void log_motion_trails(Object *sim_log, int index, Motion_element *motion_log)
+{  
+    static int motion_index = 0;
+    Vec3 object_position;
+    Vec3 rounded_object_position;
+    Vec3 old_rounded_object_position;
+    bool skip = false;
+
+    for (int i = 0; i < NO_OBJECTS; i++)
+    {
+
+        object_position = get_log_data(sim_log, index)[i].motion.position;
+
+        rounded_object_position.x = round(object_position.x / 10000.0) * 10000.0;
+        rounded_object_position.y = round(object_position.y / 10000.0) * 10000.0;
+        rounded_object_position.z = round(object_position.z / 10000.0) * 10000.0;
+
+        if (index > 0)
+        {
+            object_position = get_log_data(sim_log, index - 1)[i].motion.position;
+
+            old_rounded_object_position.x = round(object_position.x / 10000.0) * 10000.0;
+            old_rounded_object_position.y = round(object_position.y / 10000.0) * 10000.0;
+            old_rounded_object_position.z = round(object_position.z / 10000.0) * 10000.0;
+
+            if (old_rounded_object_position.x == rounded_object_position.x &&
+                    old_rounded_object_position.y == rounded_object_position.y &&
+                        old_rounded_object_position.z == rounded_object_position.z)
+            {
+                continue;
+            }
+            else
+            {
+                motion_log[motion_index * NO_OBJECTS + i].position.x = rounded_object_position.x;
+                motion_log[motion_index * NO_OBJECTS + i].position.y = rounded_object_position.y;
+                motion_log[motion_index * NO_OBJECTS + i].position.z = rounded_object_position.z;
+            }
+        }
+
+    }
+
+            
+
+}
+
+
 // interactive version of the advanced renderer at a snapshot
 char render_interactive(Object *sim_log, int time_seconds, bool have_time_control)
 {   
+    clock_t start;
+    clock_t end;
+    double cpu_time_used;
 
     double extra_move = 1;
     char input_str[32];
 
-
-
     while (1)
     {
+        start = clock();
+
+        
         render_objects_static(sim_log, time_seconds);
 
+        reset_interpolation = false;
+
+        end = clock();
+        cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+        printf("Time: %f seconds\n", cpu_time_used);
        
 
         if (have_time_control)
@@ -745,10 +885,12 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         else if (strcmp(input_str, "+") == 0)
         {
             camera.zoom *= 2;
+            reset_interpolation = true;
         }
         else if (strcmp(input_str, "-") == 0)
         {
             camera.zoom /= 2;
+            reset_interpolation = true;
         }
         else if (input_str[0] == 'z')
         {
@@ -923,6 +1065,46 @@ Vec3 rotate_z_up(Vec3 v, double spin_deg, double pitch_deg)
 
     Vec3 out = {x2, y2, z2};
     return out;
+}
+
+
+Mat3 camera_rot_matrix(double spin_deg, double pitch_deg)
+{
+    double spin  = spin_deg  * (M_PI / 180.0);
+    double pitch = pitch_deg * (M_PI / 180.0);
+
+    double cs = cos(spin);
+    double ss = sin(spin);
+    double cp = cos(pitch);
+    double sp = sin(pitch);
+
+    Mat3 R;
+
+    // --- Rotation around Z (spin/yaw) ---
+    double Rz[3][3] = {
+        { cs, -ss, 0 },
+        { ss,  cs, 0 },
+        {  0,   0, 1 }
+    };
+
+    // --- Rotation around X (pitch) ---
+    double Rx[3][3] = {
+        { 1,  0,   0 },
+        { 0, cp, -sp },
+        { 0, sp,  cp }
+    };
+
+    // R = Rx * Rz
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+        {
+            R.m[i][j] =
+                  Rx[i][0] * Rz[0][j]
+                + Rx[i][1] * Rz[1][j]
+                + Rx[i][2] * Rz[2][j];
+        }
+
+    return R;
 }
 
 void pan_camera(Vec3 direction, double move, double pitch, double yaw)
