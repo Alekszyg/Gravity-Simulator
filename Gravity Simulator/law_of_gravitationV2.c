@@ -568,7 +568,7 @@ void render_objects_static(Object *sim_log, int time_seconds)
 // extremely inefficient - calculates every single frame
 void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail trails[][200], double *closest_depth)
 {
-
+    int counter = 0;
     Object *log_now = get_log_data(sim_log, time_seconds);
 
     Mat3 R = camera_rot_matrix(degrees.z, degrees.x);
@@ -682,7 +682,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
             trailx = (int)(rot_display_position.x * inv_pixel_x / depth_ratio + half_x);
             traily = (int)((camera.no_pixelsY) - (rot_display_position.y * inv_pixel_y / depth_ratio + half_y));
-
+            counter++;
 
             if (trailx >= 0 && trailx < camera.no_pixelsX && traily >= 0 && traily < camera.no_pixelsY)
             {
@@ -744,6 +744,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
         }
     }
 
+    printf("counter: %d", counter);
 }
 
 
