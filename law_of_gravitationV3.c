@@ -583,6 +583,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
     double inv_pixel_x = 1.0 / camera.pixel_size_x;
     double inv_pixel_y = 1.0 / camera.pixel_size_y;
 
+    double pixel_y_squared = camera.pixel_size_y * camera.pixel_size_y;
     int half_x = camera.no_pixelsX / 2;
     int half_y = camera.no_pixelsY / 2;
 
@@ -596,7 +597,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
     Vec3 vrot;
 
     int skip[NO_OBJECTS];
-    //double object_depths[NO_OBJECTS] = {camera.pixel_size_y};
+    double object_depths[NO_OBJECTS] = {camera.pixel_size_y};
 
     if (view_focused_object >= 0)
     {
@@ -644,7 +645,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
                 velocity.z = log_i[j].motion.velocity.z;
 
                 speeds[j] = velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
-                skip[j] = (int)(1e7 / speeds[j]);
+                skip[j] = (int)(object_depths[j] / speeds[j]);
             }
             
             
@@ -690,7 +691,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
 
 
-            //object_depths[j] = camera.pixel_size_y * depth_ratio;
+            object_depths[j] = camera.pixel_size_y * depth_ratio * 2.0;
 
 
             velocity.x = log_i[j].motion.velocity.x;
@@ -699,7 +700,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
             speeds[j] = velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
 
-            skip[j] = (int)(1e7 / speeds[j]);
+            skip[j] = (int)(object_depths[j] / speeds[j]);
 
             trailx = (int)(rot_display_position.x * inv_pixel_x / depth_ratio + half_x);
             traily = (int)((camera.no_pixelsY) - (rot_display_position.y * inv_pixel_y / depth_ratio + half_y));
