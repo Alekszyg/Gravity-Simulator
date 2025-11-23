@@ -127,7 +127,7 @@ Camera camera = {
     .fov_y = 120,
     .zoom = 1,
     .view_size_y = 8e8,
-    .no_pixelsY = 40,
+    .no_pixelsY = 48,
     .pixel_aspect_ratio = 1.22,
     .view_aspect_ratio = 2
 };
