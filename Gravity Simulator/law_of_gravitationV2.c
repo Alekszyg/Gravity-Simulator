@@ -630,7 +630,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
         for (int j = 0; j < NO_OBJECTS; j++)
         {
 
-             Vec3 object_position;
+            Vec3 object_position;
             Vec3 unrot_display_position;
             double depth_ratio;
             double object_angle_size_y;
