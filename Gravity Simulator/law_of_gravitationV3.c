@@ -589,7 +589,6 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
     double inv_pixel_x = 1.0 / camera.pixel_size_x;
     double inv_pixel_y = 1.0 / camera.pixel_size_y;
 
-    double pixel_y_squared = camera.pixel_size_y * camera.pixel_size_y;
     int half_x = camera.no_pixelsX / 2;
     int half_y = camera.no_pixelsY / 2;
     int max_i = time_scale / log_step;
@@ -650,12 +649,13 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
         for (int j = 0; j < NO_OBJECTS; j++)
         {
-
+            double acceleration;
             Vec3 object_position;
             Vec3 unrot_display_position;
             double depth_ratio;
             double object_angle_size_y;
 
+            
             if (i == 0)
             {
                 velocity.x = log_i[j].motion.velocity.x;
@@ -663,8 +663,9 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
                 velocity.z = log_i[j].motion.velocity.z;
 
                 speeds[j] = fast_sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z) * speed_multiplier;
-                if (speeds[j] < 1e-9) speeds[j] = 1;
+                if (speeds[j] < 1) speeds[j] = 1;
                 skip_countdown[j] = (int)(object_depths[j] / speeds[j]);
+                if (skip_countdown[j] > 100 ) skip_countdown[j] = 100;
                 printf("skip_countdown: %d", skip_countdown[j]);
             }
             
@@ -717,10 +718,11 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
             velocity.z = log_i[j].motion.velocity.z;
             
             speeds[j] = fast_sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z) * speed_multiplier;
-            if (speeds[j] < 1e-9) speeds[j] = 1;
+            if (speeds[j] < 1) speeds[j] = 1;
 
-            skip_countdown[j] = (int)(object_depths[j] / speeds[j]);
-            
+
+            skip_countdown[j] = (int)((object_depths[j] / (speeds[j])));
+            if (skip_countdown[j] > 100 ) skip_countdown[j] = 100;
 
             trailx = (int)(rot_display_position.x * inv_pixel_x / depth_ratio + half_x);
             traily = (int)((camera.no_pixelsY) - (rot_display_position.y * inv_pixel_y / depth_ratio + half_y));

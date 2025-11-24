@@ -703,8 +703,8 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
                 */
                 
-                vx_pixels[j] = 0.05;
-                vy_pixels[j] = 0.05;
+                vx_pixels[j] = 0.01;
+                vy_pixels[j] = 0.01;
 
 
             } 
@@ -780,8 +780,8 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
             vx_pixels[j] = (vrot.x * speed_multiplier * inv_pixel_x) / depth_ratio;
             vy_pixels[j] = (vrot.y * speed_multiplier * inv_pixel_y) / depth_ratio;
 
-            if (vx_pixels[j] < 0.05) vx_pixels[j] = 0.05;
-            if (vy_pixels[j] < 0.05) vy_pixels[j] = 0.05;
+            if (vx_pixels[j] < 0.01) vx_pixels[j] = 0.01;
+            if (vy_pixels[j] < 0.01) vy_pixels[j] = 0.01;
             
 
             // Recompute pixel position
