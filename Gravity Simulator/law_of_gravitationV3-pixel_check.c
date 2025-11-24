@@ -12,6 +12,7 @@ Start Date: 24/10/2025
 #include <stdbool.h>
 #include <windows.h>
 #include <time.h>
+#include <stdint.h>
 
 #define FRAME_BUFFER_SIZE 100000
 
@@ -182,6 +183,10 @@ void display_all_information(Object objects[]);
 void clear_input_buffer();
 void init_camera();
 void clear_screen() {printf("\033[2J\033[H"); };
+double fast_rsqrt(double x);
+double fast_sqrt(double x);
+
+
 
 
 // ui
@@ -590,6 +595,9 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
     int max_i = time_scale / log_step;
     double pivot_offset_z = camera.distance_from_pivot / camera.zoom;
 
+    int skip_factor = 10;
+    int speed_multiplier = log_step * skip_factor;
+
 
     int trailx;
     int traily;
@@ -598,8 +606,13 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
     Vec3 velocity;
     Vec3 vrot;
 
-    int skip[NO_OBJECTS];
+    //int skip_countdown[NO_OBJECTS];
     double object_depths[NO_OBJECTS] = {camera.pixel_size_y};
+    double accum_x[NO_OBJECTS] = {0};
+    double accum_y[NO_OBJECTS] = {0};
+    double vx_pixels[NO_OBJECTS];
+    double vy_pixels[NO_OBJECTS];
+
 
     if (view_focused_object >= 0)
     {
@@ -608,7 +621,7 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
         focused_object_offset.z = -log_now[view_focused_object].motion.position.z;
     }
 
-    for (int i = 0; i < max_i; i+=10)
+    for (int i = 0; i < max_i; i+=skip_factor)
     {
 
         Object *log_i = get_log_data(sim_log, i * log_step);
@@ -642,92 +655,142 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
 
         for (int j = 0; j < NO_OBJECTS; j++)
         {
-
             Vec3 object_position;
             Vec3 unrot_display_position;
+            double object_depth;
             double depth_ratio;
             double object_angle_size_y;
 
+            
             if (i == 0)
             {
+                /*
+                    // --- Velocity for accumulation ---
                 velocity.x = log_i[j].motion.velocity.x;
                 velocity.y = log_i[j].motion.velocity.y;
                 velocity.z = log_i[j].motion.velocity.z;
 
-                speeds[j] = velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
-                skip[j] = (int)(object_depths[j] / speeds[j]);
-            }
-            
-            
-            if (skip[j] < 1) skip[j] = 1;
+                // Rotate velocity into camera space
+                vrot = mat3_multiply_vec3(R, velocity);
 
-            if((i % skip[j]) != 0)
+                // Rotate object position into camera space
+                object_position = log_i[j].motion.position;
+
+                unrot_display_position.x = object_position.x + base_offset.x;
+                unrot_display_position.y = object_position.y + base_offset.y;
+                unrot_display_position.z = object_position.z + base_offset.z;
+
+                rot_display_position = mat3_multiply_vec3(R, unrot_display_position);
+
+                // ---------- Depth ratio ----------
+                double x = camera.pixel_size_y / (object_depth * 2.0);
+                 if (object_depth <= 0) continue;
+
+                if (x > 0.01)
+                    object_angle_size_y = 2.0 * atan(x);
+                else
+                    object_angle_size_y = camera.pixel_size_y / object_depth;
+
+                depth_ratio = camera.angular_resolution_y / object_angle_size_y;
+
+                // ---------- Convert vrot to pixel-space velocity ----------
+                vx_pixels[j] = (vrot.x * speed_multiplier * inv_pixel_x) / depth_ratio;
+                vy_pixels[j] = (vrot.y * speed_multiplier * inv_pixel_y) / depth_ratio;
+
+                if (vx_pixels[j] < 0.05) vx_pixels[j] = 0.05;
+                if (vy_pixels[j] < 0.05) vy_pixels[j] = 0.05;
+                // ---------- Accumulate pixel movement ----------
+
+                */
+                
+                vx_pixels[j] = 0.05;
+                vy_pixels[j] = 0.05;
+
+
+            } 
+            
+
+
+            
+            accum_x[j] += vx_pixels[j];
+            accum_y[j] += vy_pixels[j];
+
+              //printf("x: %lf y: %lf", accum_x[j], accum_y[j]);
+            // Check if we crossed a pixel boundary
+            if (fabs(accum_x[j]) < 1.0 && fabs(accum_y[j]) < 1.0)
+            {
+                // NOT enough movement → skip heavy work
                 continue;
+            }
+
+            // Reduce accumulation but keep fractional remainder
+            
+            //accum_x[j] = fmod(accum_x[j], 1.0);
+            //accum_y[j] = fmod(accum_y[j], 1.0);
+
+            accum_x[j] = 0;
+            accum_y[j] = 0;
 
             
 
+
+
+            // --- Velocity for accumulation ---
+            velocity.x = log_i[j].motion.velocity.x;
+            velocity.y = log_i[j].motion.velocity.y;
+            velocity.z = log_i[j].motion.velocity.z;
+
+            // Rotate velocity into camera space
+            vrot = mat3_multiply_vec3(R, velocity);
+
+            // Rotate object position into camera space
             object_position = log_i[j].motion.position;
+
             unrot_display_position.x = object_position.x + base_offset.x;
             unrot_display_position.y = object_position.y + base_offset.y;
             unrot_display_position.z = object_position.z + base_offset.z;
 
             rot_display_position = mat3_multiply_vec3(R, unrot_display_position);
 
+            object_depth = -rot_display_position.z + pivot_offset_z;
+            if (object_depth <= 0) continue;
 
-            object_depth = -rot_display_position.z + pivot_offset_z; // distance in metres from the camera to the object   
-
-            if (object_depth <= 0)
-                continue;
-            
-            // Quick approximate FOV clip
-            double maxX = object_depth * tan_half_fov_x * 1.1;  // 10% padding
+            // ---------- Quick FOV cull ----------
+            double maxX = object_depth * tan_half_fov_x * 1.1;
             double maxY = object_depth * tan_half_fov_y * 1.1;
+
             double abs_x = rot_display_position.x * rot_display_position.x;
             double abs_y = rot_display_position.y * rot_display_position.y;
 
             if (abs_x > maxX * maxX) continue;
             if (abs_y > maxY * maxY) continue;
 
+            // ---------- Depth ratio ----------
             double x = camera.pixel_size_y / (object_depth * 2.0);
 
-            if (x > 0.01)  // threshold where linear approx starts to deviate
-                object_angle_size_y = 2.0 * atan(x);  // exact for very close objects
+            if (x > 0.01)
+                object_angle_size_y = 2.0 * atan(x);
             else
-                object_angle_size_y = camera.pixel_size_y / object_depth;  // fast linear approx
-
-
+                object_angle_size_y = camera.pixel_size_y / object_depth;
 
             depth_ratio = camera.angular_resolution_y / object_angle_size_y;
 
-
-
+            // ---------- Convert vrot to pixel-space velocity ----------
             
-            object_depths[j] = camera.pixel_size_y * depth_ratio * 2.0;
-            
+            vx_pixels[j] = (vrot.x * speed_multiplier * inv_pixel_x) / depth_ratio;
+            vy_pixels[j] = (vrot.y * speed_multiplier * inv_pixel_y) / depth_ratio;
 
-            velocity.x = log_i[j].motion.velocity.x;
-            velocity.y = log_i[j].motion.velocity.y;
-            velocity.z = log_i[j].motion.velocity.z;
-
-            
-            speeds[j] = velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
-
-            skip[j] = (int)(object_depths[j] / speeds[j]);
+            if (vx_pixels[j] < 0.05) vx_pixels[j] = 0.05;
+            if (vy_pixels[j] < 0.05) vy_pixels[j] = 0.05;
             
 
-            trailx = (int)(rot_display_position.x * inv_pixel_x / depth_ratio + half_x);
-            traily = (int)((camera.no_pixelsY) - (rot_display_position.y * inv_pixel_y / depth_ratio + half_y));
-            /*
-            if (trailx >= 0 && trailx < camera.no_pixelsX && traily >= 0 && traily < camera.no_pixelsY)
+            // Recompute pixel position
+            int trailx = (int)(rot_display_position.x * inv_pixel_x / depth_ratio + half_x);
+            int traily = (int)((camera.no_pixelsY) - (rot_display_position.y * inv_pixel_y / depth_ratio + half_y));
+
+            if ((unsigned)trailx < (unsigned)camera.no_pixelsX &&
+                (unsigned)traily < (unsigned)camera.no_pixelsY)
             {
-                */
-            if ((unsigned int)trailx < (unsigned int)camera.no_pixelsX && 
-                (unsigned int)traily < (unsigned int)camera.no_pixelsY)
-            {
-                Vec3 vrot;
-
-                vrot = rotate_z_up(velocity, degrees.z, degrees.x);
-
                 if (!closest_initialised)
                 {
                     *closest_depth = object_depth;
@@ -777,9 +840,10 @@ void calculate_motion_trails(Object *sim_log, int time_seconds, Motion_trail tra
                 {
                     trails[trailx][traily].slope_pixel_position = '|'; // steep downward
                 }
-                
+
             }
         }
+
     }
 
 }
@@ -791,6 +855,8 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
     clock_t start;
     clock_t end;
     double cpu_time_used;
+    double sum = 0;
+    int count = 1;
 
     double extra_move = 1;
     char input_str[32];
@@ -805,7 +871,12 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
 
         end = clock();
         cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
-        printf("Frequency: %f\n", 1.0 / cpu_time_used);
+
+        if (cpu_time_used == 0) cpu_time_used = 0.001;
+
+        sum += 1.0 / cpu_time_used;
+
+        printf("Frequency: %f\n", sum / count++);
        
 
         if (have_time_control)
@@ -1257,9 +1328,29 @@ void init_camera()
 }
 
 
+inline double fast_rsqrt(double x)
+{
+    double xhalf = 0.5 * x;
+
+    // reinterpret-cast x as 64-bit integer
+    uint64_t i = *(uint64_t*)&x;
+
+    // magic constant for double precision
+    i = 0x5fe6eb50c7b537a9ULL - (i >> 1);
+
+    double y = *(double*)&i;
+
+    // One Newton iteration (good accuracy)
+    y = y * (1.5 - xhalf * y * y);
+
+    return y;
+}
 
 
-
+inline double fast_sqrt(double x)
+{
+    return x * fast_rsqrt(x);
+}
 
 /*
     ui
