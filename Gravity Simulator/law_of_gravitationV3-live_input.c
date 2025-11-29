@@ -21,7 +21,7 @@ Start Date: 24/10/2025
 
 
 
-#define TARGET_FPS 30
+#define TARGET_FPS 60
 #define TARGET_FRAME_TIME (1.0 / TARGET_FPS)
 #define FRAME_BUFFER_SIZE 100000
 
@@ -137,7 +137,7 @@ Camera camera = {
     .fov_y = 120,
     .zoom = 1,
     .view_size_y = 8e8,
-    .no_pixelsY = 80,
+    .no_pixelsY = 40,
     .pixel_aspect_ratio = 1.22,
     .view_aspect_ratio = 2
 };
@@ -194,6 +194,8 @@ void init_camera();
 void clear_screen() {printf("\033[2J\033[H"); };
 double fast_rsqrt(double x);
 double fast_sqrt(double x);
+static int key_down(int vk);
+void flush_console_input();
 
 
 
@@ -815,6 +817,7 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
     QueryPerformanceFrequency(&freq);
 
     QueryPerformanceCounter(&prev);
+
     while (1)
     {
         QueryPerformanceCounter(&now);
@@ -822,109 +825,79 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         double dt = (double)(now.QuadPart - prev.QuadPart) / freq.QuadPart;
         prev = now;
 
+        double base_move = movement_multiplier * dt * calculate_resolution();
+        double shift_move = shift_multiplier * base_move;
        
-
-        if (_kbhit()) 
+        // Quit
+        if (key_down('Q'))
         {
-            int ch = _getch();
-
-            if (ch == 'q')
-                break;
-
-
-            if (ch == 'i')
-            {
-                camera.zoom *= 1+dt;
-            }
-
-            if (ch == 'o')
-            {
-                camera.zoom /= 1+dt;
-            }
-
-            switch (ch)
-            {
-                case 'W':
-                    pan_camera((Vec3){0,1,0}, shift_multiplier * movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-                case 'S':
-                    pan_camera((Vec3){0,-1,0}, shift_multiplier * movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-                case 'A':
-                    pan_camera((Vec3){-1,0,0}, shift_multiplier * movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-                case 'D':
-                    pan_camera((Vec3){1,0,0}, shift_multiplier * movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-
-                case 'C':
-                    pan_camera((Vec3){0,0,-1}, shift_multiplier * movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-                case 'X':
-                    pan_camera((Vec3){0,0,1}, shift_multiplier * movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-
-
-                case 'w':
-                    pan_camera((Vec3){0,1,0}, movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-                case 's':
-                    pan_camera((Vec3){0,-1,0}, movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-                case 'a':
-                    pan_camera((Vec3){-1,0,0},movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-                case 'd':
-                    pan_camera((Vec3){1,0,0},movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-
-                case 'c':
-                    pan_camera((Vec3){0,0,-1}, movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-                case 'x':
-                    pan_camera((Vec3){0,0,1}, movement_multiplier * dt * calculate_resolution(), -degrees.x, -degrees.z);
-                    break;
-
-            }
-
-
-
-
-
-
-            if (ch == 0 || ch == 224) {
-                int ch2 = _getch();
-
-                switch (ch2)
-                {
-                    case 72:
-                        degrees.x += dt * rotation_multiplier;
-                        break;
-
-                    case 80:
-                        degrees.x -= dt * rotation_multiplier;
-                        break;
-
-                    case 75:
-                        degrees.z += dt * rotation_multiplier;
-                        break;
-                    case 77:
-                        degrees.z -= dt * rotation_multiplier;
-                        break;
-                }
-            }
+            flush_console_input();
+            break;
         }
+
+        // Zoom
+        if (key_down('I'))
+            camera.zoom *= (1.0 + dt);
+
+        if (key_down('O'))
+            camera.zoom /= (1.0 + dt);
+
+
+        if (key_down('W'))
+            pan_camera((Vec3){0,1,0}, base_move, -degrees.x, -degrees.z);
+
+        if (key_down('S'))
+            pan_camera((Vec3){0,-1,0}, base_move, -degrees.x, -degrees.z);
+
+        if (key_down('A'))
+            pan_camera((Vec3){-1,0,0}, base_move, -degrees.x, -degrees.z);
+
+        if (key_down('D'))
+            pan_camera((Vec3){1,0,0}, base_move, -degrees.x, -degrees.z);
+
+        if (key_down('C'))
+            pan_camera((Vec3){0,0,-1}, base_move, -degrees.x, -degrees.z);
+
+        if (key_down('X'))
+            pan_camera((Vec3){0,0,1}, base_move, -degrees.x, -degrees.z);
+
+
+
+
+        // Shifted movement (uppercase keys if desired)
+        if (key_down('W') && key_down(VK_SHIFT))
+            pan_camera((Vec3){0,1,0}, shift_move, -degrees.x, -degrees.z);
+
+        if (key_down('S') && key_down(VK_SHIFT))
+            pan_camera((Vec3){0,-1,0}, shift_move, -degrees.x, -degrees.z);
+
+        if (key_down('A') && key_down(VK_SHIFT))
+            pan_camera((Vec3){-1,0,0}, shift_move, -degrees.x, -degrees.z);
+
+        if (key_down('D') && key_down(VK_SHIFT))
+            pan_camera((Vec3){1,0,0}, shift_move, -degrees.x, -degrees.z);
+
+        if (key_down('C') && key_down(VK_SHIFT))
+            pan_camera((Vec3){0,0,-1}, shift_move, -degrees.x, -degrees.z);
+
+        if (key_down('X') && key_down(VK_SHIFT))
+            pan_camera((Vec3){0,0,1}, shift_move, -degrees.x, -degrees.z);
+
+
+
+        // --- Rotation (Arrow keys) ---
+        if (key_down(VK_UP))
+            degrees.x += dt * rotation_multiplier;
+
+        if (key_down(VK_DOWN))
+            degrees.x -= dt * rotation_multiplier;
+
+        if (key_down(VK_LEFT))
+            degrees.z += dt * rotation_multiplier;
+
+        if (key_down(VK_RIGHT))
+            degrees.z -= dt * rotation_multiplier;
+       
 
 
         render_objects_static(sim_log, time_seconds);
@@ -932,8 +905,8 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         printf("[ ZOOM: - | zX | + ]   [ YAW: yX | PITCH: pX ]   [ UP: w | DOWN: s | LEFT: a | RIGHT: d ]   [ QUIT: q ]\n");
 
         // clears current line
+        
         printf("\033[2K");
-
         double remaining = TARGET_FRAME_TIME - dt;
         if (remaining > 0)
         {
@@ -941,8 +914,6 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         }
         
     }
-
-
    
 }
 
@@ -1277,6 +1248,27 @@ inline double fast_sqrt(double x)
 {
     return x * fast_rsqrt(x);
 }
+
+
+static inline int key_down(int vk)
+{
+    return (GetAsyncKeyState(vk) & 0x8000) != 0;
+}
+
+
+void flush_console_input()
+{
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    if (hIn == INVALID_HANDLE_VALUE) return;
+
+    // Clear the input buffer
+    FlushConsoleInputBuffer(hIn);
+}
+
+
+
+
+
 
 /*
     ui
