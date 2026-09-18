@@ -832,7 +832,24 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         if (key_down('Q'))
         {
             flush_console_input();
-            break;
+            return '0';
+        }
+
+
+        // time control
+        if (have_time_control)
+        {
+            if (key_down(VK_OEM_PERIOD))
+            {
+                while (key_down(VK_OEM_PERIOD)) { Sleep(1); } // wait for release
+                return '>';
+            }
+
+            if (key_down(VK_OEM_COMMA))
+            {
+                while (key_down(VK_OEM_COMMA)) { Sleep(1); } // wait for release
+                return '<';
+            }
         }
 
         // Zoom
@@ -901,8 +918,10 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
 
 
         render_objects_static(sim_log, time_seconds);
-
-        printf("[ ZOOM: - | zX | + ]   [ YAW: yX | PITCH: pX ]   [ UP: w | DOWN: s | LEFT: a | RIGHT: d ]   [ QUIT: q ]\n");
+        if (have_time_control)
+            printf("[ TIME: < | > ]   ");
+        
+        printf("[ ZOOM: i | o ]   [ YAW: horiz. arrows | PITCH: vert. arrows ]   [ [PAN] UP: w | DOWN: s | LEFT: a | RIGHT: d ]   [ [GO] FORWARD: c | BACK: x ]   [ QUIT: q ]\n");
 
         // clears current line
         
@@ -937,7 +956,10 @@ void render_objects_playback(Object *sim_log, int start, int end)
             break;
         
         case '<':
-            i--;
+            if (i-1 >= 0)
+            {
+                i--;
+            }
             break;
 
         default:
@@ -945,6 +967,8 @@ void render_objects_playback(Object *sim_log, int start, int end)
         }
 
     }
+
+    flush_console_input();
 
 }
 
