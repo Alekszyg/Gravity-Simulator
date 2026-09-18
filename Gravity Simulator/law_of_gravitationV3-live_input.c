@@ -464,7 +464,7 @@ void render_objects_static(Object *sim_log, int time_seconds)
     for (int i = 0; i < NO_OBJECTS; i++)
     {
         Vec3 object_position;
-        Vec3 rot_display_position; // perceived location when dispalying, rotated
+        Vec3 rot_display_position; // perceived location when displaying, rotated
         double depth_ratio;
         double object_angle_size_x;
         double object_angle_size_y;
