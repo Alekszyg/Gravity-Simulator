@@ -549,7 +549,7 @@ void render_objects_static(Object *sim_log, int time_seconds)
                 // Clamp to non-negative
                 if (fraction < 0) fraction = 0;
 
-                            // Depth → colour based on fractional distance
+                            // Depth -> colour based on fractional distance
                 if (fraction > 1.0)      // >100% farther
                     idx += sprintf(&frame[idx], "\033[34m %c \033[0m", c); // blue (very far)
                 else if (fraction > 0.50) // +50% farther
