@@ -921,7 +921,7 @@ char render_interactive(Object *sim_log, int time_seconds, bool have_time_contro
         if (have_time_control)
             printf("[ TIME: < | > ]   ");
         
-        printf("[ ZOOM: i | o ]   [ YAW: horiz. arrows | PITCH: vert. arrows ]   [ [PAN] UP: w | DOWN: s | LEFT: a | RIGHT: d ]   [ [GO] FORWARD: c | BACK: x ]   [ QUIT: q ]\n");
+        printf("[ ZOOM: i | o ]   [ YAW: <> arrows | PITCH: ^v arrows ]   [ [PAN] UP: w | DOWN: s | LEFT: a | RIGHT: d ]   [ [GO] FORWARD: c | BACK: x ]   [ QUIT: q ]\n");
 
         // clears current line
         
